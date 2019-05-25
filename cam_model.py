@@ -25,6 +25,11 @@ class camModel:
         x = z*(u-self.cx)/self.fx
         y = z*(v-self.cy)/self.fy
         return x,y,z
+    
+    def inv_proj(self, x, y, z):
+        u = x*self.fx/z + self.cx
+        v = y*self.fy/z + self.cy
+        return u,v
 
 class structCore(camModel):
     """
