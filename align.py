@@ -99,6 +99,24 @@ def align(model,data):
         
     return rot,trans,trans_error
 
+def transformRt(R, t):
+    """
+    Generate a 4x4 homogeneous transformation matrix from a 3D point and Rotation matrix.
+    
+    Input:
+    R -- Rotation matrix
+    t -- (tx,ty,tz) is the 3D position 
+         
+    Output:
+    matrix -- 4x4 homogeneous transformation matrix
+    """
+    return np.array((
+    (            R[0][0],          R[0][1],         R[0][2], t[0]),
+    (            R[1][0],          R[1][1],         R[1][2], t[1]),
+    (            R[2][0],          R[2][1],         R[2][2], t[2]),
+    (                0.0,                 0.0,                 0.0, 1.0)
+    ), dtype=np.float64)
+
 def transform44Euler(l):
     """
     Generate a 4x4 homogeneous transformation matrix from a 3D point and unit quaternion euler angles.
@@ -147,6 +165,52 @@ def transform44(l):
         (                0.0,                 0.0,                 0.0, 1.0)
         ), dtype=np.float64)
 
+def rotation_matrix(l):
+    """
+    generate rotation matrix from quaternion
+    """
+    q = np.array(l[:], dtype=np.float64, copy = True)
+    nq = np.dot(q,q)
+    if nq < _EPS:
+        return np.array((
+                (1.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, 0.0, 1.0)
+                        ), dtype=np.float64)
+    q *= np.sqrt(2.0 / nq)
+    q = np.outer(q, q)
+    return np.array((
+            (1.0-q[1, 1]-q[2, 2],     q[0, 1]-q[2, 3],     q[0, 2]+q[1, 3]),
+            (q[0, 1]+q[2, 3], 1.0-q[0, 0]-q[2, 2],     q[1, 2]-q[0, 3]),
+            (q[0, 2]-q[1, 3],     q[1, 2]+q[0, 3], 1.0-q[0, 0]-q[1, 1])
+            ), dtype=np.float64)
+    
+
+def ominus(a,b):
+    """
+    Compute the relative 3D transformation between a and b.
+    
+    Input:
+    a -- first pose (homogeneous 4x4 matrix)
+    b -- second pose (homogeneous 4x4 matrix)
+    
+    Output:
+    Relative 3D transformation from a to b.
+    """
+    return np.dot(np.linalg.inv(a),b)
+
+def compute_distance(transform):
+    """
+    Compute the distance of the translational component of a 4x4 homogeneous matrix.
+    """
+    return np.linalg.norm(transform[0:3,3])
+
+def compute_angle(transform):
+    """
+    Compute the rotation angle from a 4x4 homogeneous matrix.
+    """
+    # an invitation to 3-d vision, p 27
+    return np.arccos( min(1,max(-1, (np.trace(transform[0:3,0:3]) - 1)/2) ))
 
 if __name__ == "__main__":
     
@@ -155,6 +219,14 @@ if __name__ == "__main__":
     r, p, y = quaternion_to_euler(q[0], q[1], q[2], q[3])
     print("q = {}".format(q))
     print("r, q, y = {},{},{}".format((r), (p), (y)))
+    
+    R = rotation_matrix(q)
+    t = np.array([1.0, 2.0, 3.0])
+    l = np.hstack((t, q))
+    T1 = transform44(l)
+    T2 = transformRt(R,t)
+    print("T1 = \n{}".format(T1))
+    print("T2 = \n{}".format(T2))
     
     
     

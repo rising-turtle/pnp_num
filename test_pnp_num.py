@@ -12,6 +12,7 @@ import cam_model
 import align as al
 import numpy as np
 import pnp_cv 
+import matplotlib.pyplot as plt
 
 def add_noise(z):
     """
@@ -48,23 +49,39 @@ def get_pts(cam, noise = False):
     pts = np.array([[x, y, z] for (x,y,z) in zip(px, py, pz)]).transpose()
     return pts
 
-def get_pts_uvd(cam):
+#def get_pts_uvd(cam):
+#    """
+#    get feature points in the form of [u,v,d]
+#    """
+#    w = 10
+#    s = 10
+#    pts = []
+#    for u in range(w, cam.width - w, s):
+#        for v in range(w, cam.height - w, s):
+#            z = np.random.uniform(3.0, 7.0)
+#            d = cam.fx * cam.l / z 
+#            # x,y,z = cam.project(u, v, z)
+#            pts.append([u, v, d])
+#    # pts = np.array([[x, y, z] for (x,y,z) in zip(px, py, pz)]).transpose()
+#    pts = np.array(pts).transpose()
+#    return pts
+
+def get_pts_uvd(cam, N = 300):
     """
-    get feature points in the form of [u,v,d]
+    evenly distribute points in the space x ~ [-2, 2], y ~ [-2, 2], z ~ [2, 5]
     """
-    w = 10
-    s = 10
     pts = []
-    for u in range(w, cam.width - w, s):
-        for v in range(w, cam.height - w, s):
-            z = np.random.uniform(3.0, 7.0)
-            d = cam.fx * cam.l / z 
-            # x,y,z = cam.project(u, v, z)
-            pts.append([u, v, d])
-    # pts = np.array([[x, y, z] for (x,y,z) in zip(px, py, pz)]).transpose()
+    for i in range(N):
+        x = np.random.uniform(-2, 2)
+        y = np.random.uniform(-2, 2)
+        z = np.random.uniform(2, 5)
+        
+        u, v, d = cam.inv_proj_uvd(x, y, z)
+        pts.append([u, v, d])
+    
     pts = np.array(pts).transpose()
     return pts
-    
+
     
 def pts_from_uvd(pts, cam, noise = False):
     """
@@ -103,9 +120,9 @@ def get_pose():
     """
     generate different pose changes
     """
-    
-    angle = [3, 6, 9] # rotation [degrees] 
-    dis = [0.2, 0.4] # distance [m]
+
+    angle = [3, 6, 9] # rotation [degrees]
+    dis = [0.5, 1.0] # distance [m]
     
     pos = []
     
@@ -138,49 +155,224 @@ def transform_pts_euler(pts, pose):
     
     return rt_pts
 
+def err_func(T, T_est):
+    """
+    Given gt T, and estimated T_est, compute relative distance and angular error 
+    """
+    eT = al.ominus(T, T_est)
+    e_dis = al.compute_distance(eT)
+    e_ang = al.compute_angle(eT)
+    dis = al.compute_distance(T)
+    ang = al.compute_angle(T)
+    r_dis, r_ang = 0, 0
+    if dis != 0:
+        r_dis = e_dis / dis
+    if ang != 0:
+        r_ang = e_ang / ang 
+    return r_dis, r_ang, e_dis, e_ang
+
+def err_rot(R, R_est):
+    """
+    Given gt R, and estimated R_est, compute relative angular error 
+    """
+    eR = R.transpose().dot(R_est)
+    ang = al.compute_angle(R)
+    e_ang = al.compute_angle(eR)
+    r_ang = 0.
+    if ang != 0:
+        r_ang = e_ang / ang 
+    return  r_ang, e_ang
+    
+    
+def compare_rotation():
+    """
+    compare rotation accuracy estimated by 3d-2d and 2d-2d
+    """
+    cam = cam_model.structCore()
+    pos_set = get_pose()
+
+    npts = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    # npts = [20, 30, 40]
+    ea_2d2d = [] # mean angular error 
+    ea_3d2d = [] 
+    for npt in npts:
+        ne_2d2d = []
+        ne_3d2d = []
+        for i in range(300):
+            for pos in pos_set:
+                 T = al.transform44Euler(pos)
+                 R = T[0:3,0:3]
+                 t = T[0:3,3]
+                 print('gt: tij = {}, rpy = {}'.format(t.transpose(), al.r2d(al.rotationMatrixToEulerAngles(R).transpose())))
+                 pts_j = get_pts_uvd(cam)
+                 pts_i, pts_j = transform_pts_uvd(R, t, cam, pts_j)
+                 pts_j, pts_j_uv = pts_from_uvd(pts_j, cam, noise = True)
+                 pts_i, pts_i_uv = pts_from_uvd(pts_i, cam, noise = True)
+                 # Rij, tij, _ = al.align(np.asmatrix(pts_j), np.asmatrix(pts_i))
+                 
+                 Rij, tij = pnp_cv.pnp_2d2d_with_num(pts_j_uv[:2,:].transpose(), pts_i_uv[:2,:].transpose(), cam.K, n = npt)
+                 # Rij, tij = pnp_cv.pnp_3d2d(pts_j.transpose(), pts_i_uv[:2,:].transpose(), cam.K)
+                 rpy = al.rotationMatrixToEulerAngles(Rij)
+                 print('2d-2d est: rpy = ', al.r2d(rpy))
+                 e = err_rot(R, Rij)
+                 ne_2d2d.append(e)
+                 
+                 Rij, tij = pnp_cv.pnp_3d2d_with_num(pts_j.transpose(), pts_i_uv[:2,:].transpose(), cam.K, n = npt)
+                  
+                 rpy = al.rotationMatrixToEulerAngles(Rij)
+                 print('3d-2d est: rpy = ', al.r2d(rpy)) 
+                 e = err_rot(R, Rij)
+                 ne_3d2d.append(e)
+                 
+        ne_2d2d = np.array(ne_2d2d)[:,0]
+        ea_2d2d.append(np.mean(ne_2d2d)) 
+        
+        ne_3d2d = np.array(ne_3d2d)[:,0]
+        ea_3d2d.append(np.mean(ne_3d2d))
+        
+    # draw the error 
+    x = np.array(npts, dtype=np.int32)
+    m_2d2d = np.array(ea_2d2d)*100.
+    m_3d2d = np.array(ea_3d2d)*100.
+    plt.close('all')
+    fig, ax1 = plt.subplots(1,1)
+    fig.subplots_adjust(hspace=.7)
+    ax1.plot(x, m_2d2d,'b-o', label='2d-2d')
+    ax1.set_ylabel('rotation error [%]')
+    ax1.plot(x, m_3d2d, 'r-s', label='3d-2d')
+    
+    # ax1.errorbar(x, m_ed, yerr = m_sd, fmt = 'ro')
+    
+    # ax1.plot(x, mean_da[:,1],'g-', label='')
+    # ax1.plot(x, bias_a[:,2],'r-', label='bias_az')
+    ax1.set_ylim([0,20])
+    # plt.title('Accelerometer Bias')
+    ax1.set_xlabel('Number of Inliers')
+    ax1.set_title('Rotation comparison 3d-2d vs 2d-2d')
+    ax1.legend(loc='upper right', fontsize='small')
+    plt.savefig("./result/rotation_comparison.png", dpi=360)
+    
+    plt.draw()
+    
 
 def generate_data_for_test():
     cam = cam_model.structCore()
     pos_set = get_pose()
 
-    for pos in pos_set:
-         T = al.transform44Euler(pos)
-         R = T[0:3,0:3]
-         t = T[0:3,3]
-         print('gt: tij = {}, rpy = {}'.format(t.transpose(), al.r2d(al.rotationMatrixToEulerAngles(R).transpose())))
-         pts_j = get_pts_uvd(cam)
-         pts_i, pts_j = transform_pts_uvd(R, t, cam, pts_j)
-         pts_j, pts_j_uv = pts_from_uvd(pts_j, cam, noise = True)
-         pts_i, pts_i_uv = pts_from_uvd(pts_i, cam, noise = True)
-         # Rij, tij, _ = al.align(np.asmatrix(pts_j), np.asmatrix(pts_i))
-         
-         # Rij, tij = pnp_cv.pnp_2d2d(pts_j_uv[:2,:].transpose(), pts_i_uv[:2,:].transpose(), cam.K)
-         Rij, tij = pnp_cv.pnp_3d2d(pts_j.transpose(), pts_i_uv[:2,:].transpose(), cam.K)
-         
-         rpy = al.rotationMatrixToEulerAngles(Rij)
-         print('est: tij = {}, rpy = {}'.format(tij.transpose(), al.r2d(rpy))) 
-         
+    # npts = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+    # npts = [7, 14, 21, 28, 35, 42, 49]
+    # npts = [6, 9, 12, 15, 18, 21, 24, 27, 30]
+    # npts = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    npts = [8, 9, 10, 11]
+    # npts = [20, 30, 40]
+    m_ed = [] # mean distance error 
+    m_ea = [] # mean angular error 
+    m_sd = [] # std distance error 
+    m_sa = [] # std angular error 
+    for npt in npts:
+        ne = []
+        for i in range(2):
+            for pos in pos_set:
+                 T = al.transform44Euler(pos)
+                 R = T[0:3,0:3]
+                 t = T[0:3,3]
+                 print('gt: tij = {}, rpy = {}'.format(t.transpose(), al.r2d(al.rotationMatrixToEulerAngles(R).transpose())))
+                 pts_j = get_pts_uvd(cam)
+                 pts_i, pts_j = transform_pts_uvd(R, t, cam, pts_j)
+                 pts_j, pts_j_uv = pts_from_uvd(pts_j, cam, noise = True)
+                 pts_i, pts_i_uv = pts_from_uvd(pts_i, cam, noise = True)
+                 # Rij, tij, _ = al.align(np.asmatrix(pts_j), np.asmatrix(pts_i))
+                 
+                 # Rij, tij = pnp_cv.pnp_2d2d_num(pts_j_uv[:2,:].transpose(), pts_i_uv[:2,:].transpose(), cam.K)
+                 # Rij, tij = pnp_cv.pnp_3d2d(pts_j.transpose(), pts_i_uv[:2,:].transpose(), cam.K)
+    
+                 Rij, tij = pnp_cv.pnp_3d2d_with_num(pts_j.transpose(), pts_i_uv[:2,:].transpose(), cam.K, n = npt)
+                  
+                 rpy = al.rotationMatrixToEulerAngles(Rij)
+                 print('est: tij = {}, rpy = {}'.format(tij.transpose(), al.r2d(rpy))) 
+                 
+                 # compute error 
+                 T_est = al.transformRt(Rij, tij)
+                 e = err_func(T, T_est)
+                 ne.append(e)
+                 print('error is : ', e)
+        ne = np.array(ne)[:,0:2]
+        mean_da = np.mean(ne, axis = 0)
+        std_da  = np.std(ne, axis = 0)
+        m_ed.append(mean_da[0]) 
+        m_ea.append(mean_da[1])
+        m_sd.append(std_da[0])
+        m_sa.append(std_da[1])
+        
+    # draw the error 
+    x = np.array(npts, dtype=np.int32)
+    m_ed = np.array(m_ed)*100.
+    m_ea = np.array(m_ea)*100.
+    m_sd = np.array(m_sd)*0. # not shown standard
+    m_sa = np.array(m_sa)*0.
+    plt.close('all')
+    fig, (ax1, ax2) = plt.subplots(2,1)
+    fig.subplots_adjust(hspace=.7)
+    ax1.plot(x, m_ed,'b-o', label='distance error percentage [%]')
+    ax1.set_ylabel('translation error [%]')
+    # ax1.errorbar(x, m_ed, yerr = m_sd, fmt = 'ro')
+    
+    # ax1.plot(x, mean_da[:,1],'g-', label='')
+    # ax1.plot(x, bias_a[:,2],'r-', label='bias_az')
+    ax1.set_ylim([0,20])
+    # plt.title('Accelerometer Bias')
+    ax1.set_xlabel('Number of Inliers')
+    # ax1.set_title('Distance error in Percentage [%]')
+    # ax1.legend(loc='upper right', fontsize='small')
+    # plt.savefig("../intermidiate_files/"+data_name+"_bias_acc.png", dpi=360)
+    
+    # plt.subplot(2,1,2)
+    ax2.plot(x, m_ea,'b-o', label='angular error percentage [%]')
+    # ax2.errorbar(x, m_ea, yerr = m_sa, fmt = 'ro')
+    
+    # plt.title('Accelerometer Bias')
+    ax2.set_ylim([0,20])
+    ax2.set_xlabel('Number of Inliers')
+    ax2.set_title('Angular error Percentage [%]')
+    # ax2.legend(loc='upper right', fontsize='small')
+    # plt.savefig("../intermidiate_files/"+data_name+"_bias.png", dpi=360)   
+    plt.draw()
+
+def test_one_pose():
+    cam = cam_model.structCore()
+    
+    pts_j = get_pts_uvd(cam)
+    Pij = [0.5, 0.2, 0.4, al.d2r(1.), al.d2r(3.), al.d2r(7.)]
+    # Pij = [0., 0., 0., al.d2r(0.), al.d2r(0.), al.d2r(0.)]
+    T = al.transform44Euler(Pij)
+    R = T[0:3,0:3]
+    t = T[0:3,3]
+    pts_i, pts_j = transform_pts_uvd(R, t, cam, pts_j)
+    pts_j, pts_j_uv = pts_from_uvd(pts_j, cam, noise = True)
+    pts_i, pts_i_uv = pts_from_uvd(pts_i, cam, noise = True)
+    # Rij, tij, _ = al.align(np.asmatrix(pts_j), np.asmatrix(pts_i))
+    
+    # Rij, tij = pnp_cv.pnp_2d2d(pts_j_uv[:2,:].transpose(), pts_i_uv[:2,:].transpose(), cam.K)
+    
+    # Rij, tij = pnp_cv.pnp_2d2d_with_num(pts_j_uv[:2,:].transpose(), pts_i_uv[:2,:].transpose(), cam.K, n = 20)
+    
+    Rij, tij = pnp_cv.pnp_3d2d_with_num(pts_j.transpose(), pts_i_uv[:2,:].transpose(), cam.K, n = 50)
+    
+    rpy = al.rotationMatrixToEulerAngles(Rij)
+    print('tij = {}, rpy = {}'.format(tij.transpose(), al.r2d(rpy)))
+    
+    # computer error 
+    T_est = al.transformRt(Rij, tij)
+    e = err_func(T, T_est)
+    print('error is : ', e)
+    
+def debug():
+    pass
 
 if __name__=="__main__":
-    
-    generate_data_for_test()
-#    cam = cam_model.structCore()
-#    
-#    pts_j = get_pts_uvd(cam)
-#    Pij = [0.1, 0.2, 0.3, al.d2r(0.), al.d2r(2.), al.d2r(0.)]
-#    # Pij = [0., 0., 0., al.d2r(0.), al.d2r(0.), al.d2r(0.)]
-#    T = al.transform44Euler(Pij)
-#    R = T[0:3,0:3]
-#    t = T[0:3,3]
-#    pts_i, pts_j = transform_pts_uvd(R, t, cam, pts_j)
-#    pts_j, pts_j_uv = pts_from_uvd(pts_j, cam, noise = False)
-#    pts_i, pts_i_uv = pts_from_uvd(pts_i, cam, noise = False)
-#    # Rij, tij, _ = al.align(np.asmatrix(pts_j), np.asmatrix(pts_i))
-#    
-#    Rij, tij = pnp_cv.pnp_2d2d(pts_j_uv[:2,:].transpose(), pts_i_uv[:2,:].transpose(), cam.K)
-#    
-#    rpy = al.rotationMatrixToEulerAngles(Rij)
-#    print('tij = {}, rpy = {}'.format(tij.transpose(), al.r2d(rpy)))
+    compare_rotation()
+    # generate_data_for_test()
+    # test_one_pose()
 
     
     

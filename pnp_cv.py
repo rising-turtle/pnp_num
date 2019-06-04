@@ -12,11 +12,31 @@ import cv2
 import numpy as np 
 import cam_model 
 
-# def pnp_2d2d_with_nun(pts_j, pts_i, K, n):
+def pnp_2d2d_with_num(pts_j, pts_i, K, n):
+    """
+    pnp given the number of inliers 
+    """
+    F, mask = cv2.findFundamentalMat(pts_j.astype("double"),pts_i.astype("double"),cv2.FM_RANSAC)
     
+    # find inliers 
+    ptsj = pts_j[mask.ravel()==1]
+    ptsi = pts_i[mask.ravel()==1]
     
+    if ptsj.shape[0] < n:
+        print('2d-2d few inliers number {} < N = {}'.format( ptsj.shape[0], n))
+        return None, None
     
-
+    s = np.int32(ptsj.shape[0] / n) 
+    ptsi = ptsi[::s]
+    ptsj = ptsj[::s]
+    
+    F, _ = cv2.findFundamentalMat(ptsj, ptsi, cv2.FM_8POINT)
+    
+    E = np.matmul(np.matmul(K.T, F), K)
+    
+    points, R, t, mask = cv2.recoverPose(E, ptsj, ptsi)
+    
+    return R, t
 
 def pnp_2d2d(pts_j, pts_i, K):
     # Normalize for Esential Matrix calaculation
@@ -47,12 +67,32 @@ def pnp_2d2d(pts_j, pts_i, K):
     # point_4d = point_4d_hom / np.tile(point_4d_hom[-1, :], (4, 1))
     # point_3d = point_4d[:3, :].T
 
+def pnp_3d2d_with_num(model_points, image_points, K, n, dists = np.zeros((4,1))):
+    _, rotation_vector, translation_vector, mask = cv2.solvePnPRansac(model_points, image_points, K, dists)
+    
+    pt3d = model_points[mask.ravel()]
+    pt2d = image_points[mask.ravel()]
+    
+    if pt3d.shape[0] < n:
+        print('3d-2d few inliers number {} < N = {}'.format( pt3d.shape[0], n))
+        return None, None
+    
+    s = np.int32(pt3d.shape[0] / n) 
+    pt3d = pt3d[::s]
+    pt2d = pt2d[::s]
+    
+    _, rotation_vector, translation_vector =  cv2.solvePnP(pt3d.astype("double"), pt2d.astype("double"), K, dists)
+    R = cv2.Rodrigues(rotation_vector)[0]
+    t = translation_vector
+    return R, t    
+
 
 def pnp_3d2d(model_points, image_points, K, dists = np.zeros((4,1))):
     # Normalize for Esential Matrix calaculation
     model_points = model_points.astype("double")
     image_points = image_points.astype("double")
     _, rotation_vector, translation_vector, _ = cv2.solvePnPRansac(model_points, image_points, K, dists)
+    
     R = cv2.Rodrigues(rotation_vector)[0]
     t = translation_vector
     return R, t    
@@ -132,33 +172,5 @@ def example():
     # cv2.waitKey(0)    
 
 if __name__=="__main__":
-    # example()
-    
-    image_points_1 = np.array([
-                                (10, 30),     # Nose tip
-                                (10, 40),     # Chin
-                                (10, 50),     # Left eye left corner
-                                (10, 60),     # Right eye right corne
-                                (10, 70),# Right mouth corner
-                                (20, 30)
-                            ], dtype="double")
-    # 10	10	10	10	10
-    # 30	40	50	60	70
-    
-        #2D image points. If you change the image, you need to change vector
-    image_points_2 = np.array([
-                                (98, 3),     # Nose tip
-                                (85, 9),     # Chin
-                                (89, 20),     # Left eye left corner
-                                (100, 32),     # Right eye right corne
-                                (76, 36), # Right mouth corner
-                                (200, 50)
-                            ], dtype="double")
-
-    # 97.5135	84.7485	89.0896	100.016	75.5072
-    # 2.90076	8.83011	19.8212	32.4263	35.7677
-    cam = cam_model.structCore()
-    R, t = pnp_2d2d(image_points_1, image_points_2, cam.K)
-    print ("rotation matrix: \n {}".format(R))
-    print ("Translation vector: \n {}".format(t))
+    example()
     
