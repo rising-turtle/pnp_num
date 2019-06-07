@@ -26,6 +26,9 @@ class camModel:
                          [0, 0, 1]], dtype = "double"
                          )
     
+    def norm_pt(self, u, v):
+        return (u-self.cx)/self.fx, (v-self.cy)/self.fy
+    
     def project(self, u, v, z):
         x = z*(u-self.cx)/self.fx
         y = z*(v-self.cy)/self.fy

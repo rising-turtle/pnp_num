@@ -11,6 +11,8 @@ pnp method
 import cv2 
 import numpy as np 
 import cam_model 
+import lsq_t_with_R as ltr
+import align as al
 
 def pnp_2d2d_with_num(pts_j, pts_i, K, n):
     """
@@ -67,7 +69,31 @@ def pnp_2d2d(pts_j, pts_i, K):
     # point_4d = point_4d_hom / np.tile(point_4d_hom[-1, :], (4, 1))
     # point_3d = point_4d[:3, :].T
 
-def pnp_3d2d_with_num(model_points, image_points, K, n, dists = np.zeros((4,1))):
+def pnp_3d3d_with_num(model_points, image_points, image_pts_3d, K, n, dists = np.zeros((4,1))):
+    _, rotation_vector, translation_vector, mask = cv2.solvePnPRansac(model_points, image_points, K, dists)
+    
+    pt3d = model_points[mask.ravel()]
+    pt2d = image_points[mask.ravel()]
+    pt3d_img = image_pts_3d[mask.ravel()]
+    
+    if pt3d.shape[0] < n:
+        print('3d-2d few inliers number {} < N = {}'.format( pt3d.shape[0], n))
+        return None, None
+    
+    s = np.int32(pt3d.shape[0] / n) 
+    pt3d = pt3d[::s]
+    pt2d = pt2d[::s]
+    pt3d_img = pt3d_img[::s]
+    
+    R, t, _ = al.align(np.asmatrix(pt3d.transpose()), np.asmatrix(pt3d_img.transpose()))
+    return np.array(R), np.array(t)
+    
+
+def pnp_3d2d_with_num_and_R(model_points, image_points, cam, R, n, dists = np.zeros((4,1))):
+    """
+    given rotation R, select n points to compute translation 
+    """
+    K = cam.K
     _, rotation_vector, translation_vector, mask = cv2.solvePnPRansac(model_points, image_points, K, dists)
     
     pt3d = model_points[mask.ravel()]
@@ -82,6 +108,36 @@ def pnp_3d2d_with_num(model_points, image_points, K, n, dists = np.zeros((4,1)))
     pt2d = pt2d[::s]
     
     _, rotation_vector, translation_vector =  cv2.solvePnP(pt3d.astype("double"), pt2d.astype("double"), K, dists)
+    R2 = cv2.Rodrigues(rotation_vector)[0]
+    t = translation_vector
+    
+    #% compute t using R  
+    
+    t2 = ltr.lsq_solve(pt3d, pt2d, R, cam)
+    
+    return t2, t, R2  
+    
+
+def pnp_3d2d_with_num(model_points, image_points, K, n, dists = np.zeros((4,1))):
+    _, rotation_vector, translation_vector, mask = cv2.solvePnPRansac(model_points, image_points, K, dists)
+    
+    pt3d = model_points[mask.ravel()]
+    pt2d = image_points[mask.ravel()]
+    
+    if pt3d.shape[0] < n:
+        print('3d-2d few inliers number {} < N = {}'.format( pt3d.shape[0], n))
+        return None, None
+    
+    s = np.int32(pt3d.shape[0] / n) 
+    pt3d = pt3d[::s]
+    pt2d = pt2d[::s]
+    
+    # pt3d = 
+    N = pt2d.shape[0]
+    pt2d = np.ascontiguousarray(pt2d[:,:2]).reshape((N,1,2))
+    _, rotation_vector, translation_vector = cv2.solvePnP(pt3d.astype("double"), pt2d.astype("double"), K, dists, flags=cv2.SOLVEPNP_EPNP)
+     
+    # _, rotation_vector, translation_vector =  cv2.solvePnP(pt3d.astype("double"), pt2d.astype("double"), K, dists)
     R = cv2.Rodrigues(rotation_vector)[0]
     t = translation_vector
     return R, t    
@@ -91,7 +147,13 @@ def pnp_3d2d(model_points, image_points, K, dists = np.zeros((4,1))):
     # Normalize for Esential Matrix calaculation
     model_points = model_points.astype("double")
     image_points = image_points.astype("double")
-    _, rotation_vector, translation_vector, _ = cv2.solvePnPRansac(model_points, image_points, K, dists)
+    _, rotation_vector, translation_vector, mask = cv2.solvePnPRansac(model_points, image_points, K, dists)
+    
+    pt3d = model_points[mask.ravel()]
+    pt2d = image_points[mask.ravel()]
+    # _, rotation_vector, translation_vector = cv2.solvePnP(pt3d.astype("double"), pt2d.astype("double"), K, dists, flags=cv2.SOLVEPNP_EPNP)
+    
+    _, rotation_vector, translation_vector = cv2.solvePnP(pt3d.astype("double"), pt2d.astype("double"), K, dists)
     
     R = cv2.Rodrigues(rotation_vector)[0]
     t = translation_vector
