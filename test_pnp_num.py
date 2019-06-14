@@ -142,19 +142,19 @@ def get_pose():
 #                        for z in dis:
 #                          pos.append([x, 0., z, al.d2r(roll), al.d2r(pitch), al.d2r(yaw)])  
     # pos = [[1.5, 1.0, 0.7, al.d2r(9), al.d2r(9), al.d2r(9)]]
-    # pos = [[0., 0., 0.5, al.d2r(0), al.d2r(20), al.d2r(0)]]
+    pos = [[1., 0., 0., al.d2r(0), al.d2r(20), al.d2r(0)]]
     
-    pos.append([1, 0, 0, al.d2r(20), al.d2r(0), al.d2r(0)])
-    pos.append([0, 1, 0, al.d2r(20), al.d2r(0), al.d2r(0)])
-    pos.append([0, 0, 1, al.d2r(20), al.d2r(0), al.d2r(0)])
-
-    pos.append([1, 0, 0, al.d2r(0), al.d2r(20), al.d2r(0)])
-    pos.append([0, 1, 0, al.d2r(0), al.d2r(20), al.d2r(0)])
-    pos.append([0, 0, 1, al.d2r(0), al.d2r(20), al.d2r(0)])
-
-    pos.append([1, 0, 0, al.d2r(0), al.d2r(0), al.d2r(20)])
-    pos.append([0, 1, 0, al.d2r(0), al.d2r(0), al.d2r(20)])
-    pos.append([0, 0, 1, al.d2r(0), al.d2r(0), al.d2r(20)])    
+#    pos.append([1, 0, 0, al.d2r(20), al.d2r(0), al.d2r(0)])
+#    pos.append([0, 1, 0, al.d2r(20), al.d2r(0), al.d2r(0)])
+#    pos.append([0, 0, 1, al.d2r(20), al.d2r(0), al.d2r(0)])
+#
+#    pos.append([1, 0, 0, al.d2r(0), al.d2r(20), al.d2r(0)])
+#    pos.append([0, 1, 0, al.d2r(0), al.d2r(20), al.d2r(0)])
+#    pos.append([0, 0, 1, al.d2r(0), al.d2r(20), al.d2r(0)])
+#
+#    pos.append([1, 0, 0, al.d2r(0), al.d2r(0), al.d2r(20)])
+#    pos.append([0, 1, 0, al.d2r(0), al.d2r(0), al.d2r(20)])
+#    pos.append([0, 0, 1, al.d2r(0), al.d2r(0), al.d2r(20)])    
     
     return np.array(pos)
 
@@ -293,6 +293,7 @@ def compare_translation():
     ax1.set_xlabel('Number of Inliers')
     ax1.set_title('Translation comparison 3d-2d vs 2d-2d')
     ax1.legend(loc='upper right', fontsize='small')
+    ax1.grid()
     plt.savefig("./result/translation_comparison.png", dpi=360)
     
     plt.draw()
@@ -382,6 +383,7 @@ def compare_rotation():
     ax1.set_xlabel('Number of Inlier1s')
     ax1.set_title('Rotation comparison 3d-2d vs 2d-2d')
     ax1.legend(loc='upper right', fontsize='small')
+    ax1.grid()
     plt.savefig("./result/rotation_comparison.png", dpi=360)
     
     plt.draw()
@@ -513,7 +515,7 @@ def debug():
 
 if __name__=="__main__":
     compare_translation()
-    # compare_rotation()
+    compare_rotation()
     # generate_data_for_test()
     # test_one_pose()
 
