@@ -222,7 +222,7 @@ def compare_translation():
     for npt in npts:
         ne_2d2d = []
         ne_3d2d = []
-        for i in range(100):
+        for i in range(300):
             for pos in pos_set:
                 
                  T = al.transform44Euler(pos)
@@ -290,7 +290,7 @@ def compare_translation():
     # ax1.plot(x, bias_a[:,2],'r-', label='bias_az')
     ax1.set_ylim([0,40])
     # plt.title('Accelerometer Bias')
-    ax1.set_xlabel('Number of Inliers')
+    ax1.set_xlabel('Number of matched visual features')
     ax1.set_title('Translation comparison 3d-2d vs 2d-2d')
     ax1.legend(loc='upper right', fontsize='small')
     ax1.grid()
@@ -315,7 +315,7 @@ def compare_rotation():
     for npt in npts:
         ne_2d2d = []
         ne_3d2d = []
-        for i in range(100):
+        for i in range(300):
             for pos in pos_set:
                  T = al.transform44Euler(pos)
                  R = T[0:3,0:3]
@@ -380,7 +380,7 @@ def compare_rotation():
     # ax1.plot(x, bias_a[:,2],'r-', label='bias_az')
     ax1.set_ylim([0,20])
     # plt.title('Accelerometer Bias')
-    ax1.set_xlabel('Number of Inlier1s')
+    ax1.set_xlabel('Number of matched visual features')
     ax1.set_title('Rotation comparison 3d-2d vs 2d-2d')
     ax1.legend(loc='upper right', fontsize='small')
     ax1.grid()
